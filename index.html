@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monitor gazu – Świdnica</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#eef2f6;--card:#fff;--tx:#14202b;--mu:#5d6b79;--ln:#d5dde5;--ac:#1f5fd1;--wm:#d9822b;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f161d;--card:#18222c;--tx:#e6edf3;--mu:#93a1af;--ln:#2a3744;--ac:#5b9bff;--wm:#f0a04b;--bad:#ff8a80}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*:before,*:after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:14px 14px 40px}
+h1{font-size:20px;margin:6px 0 2px}h2{font-size:15px;margin:0 0 10px}
+.sub{color:var(--mu);font-size:13px;margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:19px}.kpi span{font-size:12px;color:var(--mu)}
+label{display:block;font-size:12px;color:var(--mu);margin-bottom:3px}
+input{width:100%;font:inherit;padding:9px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:10px 14px;background:var(--ac);color:#fff;width:100%}
+button.x{background:none;color:var(--bad);width:auto;padding:2px 8px}
+button.t{background:none;color:var(--ac);width:auto;padding:2px 8px;text-decoration:underline}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--ln)}th:first-child,td:first-child{text-align:left}th{color:var(--mu);font-weight:500}
+svg{width:100%;height:auto;display:block}
+.leg{font-size:12px;color:var(--mu);margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 0}
+details summary{font-weight:600;cursor:pointer}
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.note{font-size:12px;color:var(--mu);margin-top:8px}
+.err{color:var(--bad);font-size:13px;min-height:18px;margin-top:6px}
+</style>
+</head>
+<body>
+<main>
+<h1>Monitor zużycia gazu</h1>
+<p class="sub">Świdnica · zużycie na dobę i na stopniodzień grzania</p>
+
+<div class="kpis">
+<div class="kpi"><b id="k1">–</b><span>m³/dobę, ostatni okres</span></div>
+<div class="kpi"><b id="k2">–</b><span>m³ na stopniodzień</span></div>
+<div class="kpi"><b id="k3">–</b><span>koszt łącznie</span></div>
+</div>
+
+<div class="card">
+<h2>Nowy odczyt</h2>
+<div class="row">
+<div><label for="d">Data odczytu</label><input id="d" type="date"></div>
+<div><label for="v">Stan licznika (m³)</label><input id="v" type="number" step="0.001" inputmode="decimal"></div>
+</div>
+<div class="row">
+<div><label for="t">Średnia temp. okresu (°C), opcjonalnie</label><input id="t" type="number" step="0.1" inputmode="decimal" placeholder="z danych miesięcznych"></div>
+<div style="align-self:end"><button id="add" type="button">Dodaj odczyt</button></div>
+</div>
+<div class="err" id="err"></div>
+</div>
+
+<div class="card">
+<h2>Zużycie na dobę i temperatura</h2>
+<div id="chart"></div>
+<div class="leg"><i style="background:var(--ac)"></i>m³/dobę &nbsp; <i style="background:var(--wm)"></i>temp. średnia (°C)</div>
+</div>
+
+<div class="card">
+<h2>Okresy między odczytami</h2>
+<div class="tbl"><table id="per"></table></div>
+<div class="note">Zużycie na stopniodzień obejmuje też gaz poza ogrzewaniem (woda, kuchnia), więc latem nie spada do zera.</div>
+</div>
+
+<div class="card">
+<h2>Odczyty</h2>
+<div class="tbl"><table id="rd"></table></div>
+<div class="note">Temperatura przy odczycie to średnia okresu kończącego się tego dnia. Stuknij wartość, żeby ją zmienić lub wyczyścić (wtedy użyte zostaną dane miesięczne).</div>
+</div>
+
+<div class="card">
+<details>
+<summary>Ustawienia</summary>
+<div class="row" style="margin-top:10px">
+<div><label for="pr">Cena gazu (zł/m³)</label><input id="pr" type="number" step="0.01" inputmode="decimal"></div>
+<div><label for="bt">Temp. graniczna ogrzewania (°C)</label><input id="bt" type="number" step="0.5" inputmode="decimal"></div>
+</div>
+<label>Średnie miesięczne temperatury w Świdnicy (°C), od stycznia</label>
+<div class="mg" id="mg"></div>
+<div class="note">Domyślnie przybliżone wartości wieloletnie dla Dolnego Śląska, nie pomiary z konkretnego roku. Dla dokładności wpisz rzeczywistą średnią temperaturę przy odczycie albo popraw wartości miesięczne.</div>
+<div class="note" style="margin-top:14px"><b>Kopia zapasowa</b></div>
+<div class="row" style="margin-top:8px"><button id="ex" type="button">Eksportuj</button><button id="im" type="button">Importuj</button></div>
+<textarea id="bk" rows="4" placeholder="Eksport: tu pojawi się kod do skopiowania. Import: wklej tu kod i stuknij Importuj." style="width:100%;font:12px monospace;padding:8px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx)"></textarea>
+<div class="note" id="bkm">Import zastępuje wszystkie obecne dane.</div>
+</details>
+</div>
+</main>
+<script>
+var KEY="gaz-v1";
+var DEF={r:[],price:0,base:15,m:[-0.8,0.3,3.8,9.3,13.9,17.6,19.5,19.2,14.5,9.4,4.6,0.9]};
+var S=load();
+function load(){try{var j=localStorage.getItem(KEY);if(j){var o=JSON.parse(j);if(o&&o.r)return o}}catch(e){}return JSON.parse(JSON.stringify(DEF))}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function $(i){return document.getElementById(i)}
+function day(s){var p=s.split("-");return Date.UTC(+p[0],+p[1]-1,+p[2])}
+function fmt(n,d){return n==null||isNaN(n)?"–":n.toFixed(d==null?1:d).replace(".",",")}
+function sd(s){var p=s.split("-");return p[2]+"."+p[1]}
+function periods(){
+  var r=S.r.slice().sort(function(a,b){return day(a.d)-day(b.d)}),out=[];
+  for(var i=1;i<r.length;i++){
+    var t0=day(r[i-1].d),t1=day(r[i].d),days=Math.round((t1-t0)/864e5);
+    if(days<=0)continue;
+    var use=r[i].v-r[i-1].v,T,hdd;
+    if(r[i].t!=null&&r[i].t!==""){T=+r[i].t;hdd=days*Math.max(0,S.base-T)}
+    else{var s=0;hdd=0;for(var k=0;k<days;k++){var m=new Date(t0+k*864e5).getUTCMonth(),x=S.m[m];s+=x;hdd+=Math.max(0,S.base-x)}T=s/days}
+    out.push({a:r[i-1].d,b:r[i].d,days:days,use:use,pd:use/days,T:T,hdd:hdd,ph:hdd>0?use/hdd:null,cost:use*S.price});
+  }
+  return out;
+}
+function render(){
+  var P=periods(),last=P[P.length-1],tu=0,th=0,tc=0;
+  P.forEach(function(p){tu+=p.use;th+=p.hdd;tc+=p.cost});
+  $("k1").textContent=last?fmt(last.pd,2):"–";
+  $("k2").textContent=th>0?fmt(tu/th,3):"–";
+  $("k3").textContent=S.price?fmt(tc,0)+" zł":"–";
+  var h="<tr><th>Okres</th><th>Dni</th><th>m³</th><th>m³/d</th><th>°C</th><th>m³/°d</th><th>zł</th></tr>";
+  P.slice().reverse().forEach(function(p){h+="<tr><td>"+sd(p.a)+"–"+sd(p.b)+"</td><td>"+p.days+"</td><td>"+fmt(p.use,1)+"</td><td>"+fmt(p.pd,2)+"</td><td>"+fmt(p.T,1)+"</td><td>"+fmt(p.ph,3)+"</td><td>"+(S.price?fmt(p.cost,0):"–")+"</td></tr>"});
+  $("per").innerHTML=P.length?h:"<tr><td>Dodaj co najmniej dwa odczyty, żeby zobaczyć okresy.</td></tr>";
+  var R=S.r.map(function(x,i){return{x:x,i:i}}).sort(function(a,b){return day(b.x.d)-day(a.x.d)});
+  var g="<tr><th>Data</th><th>Stan (m³)</th><th>°C okresu</th><th></th></tr>";
+  R.forEach(function(o){g+="<tr><td>"+o.x.d+"</td><td>"+fmt(o.x.v,3)+"</td><td><button class=t data-e="+o.i+" aria-label='Edytuj temperaturę'>"+(o.x.t!=null&&o.x.t!==""?fmt(+o.x.t,1):"ustaw")+"</button></td><td><button class=x data-i="+o.i+" aria-label='Usuń odczyt'>Usuń</button></td></tr>"});
+  $("rd").innerHTML=R.length?g:"<tr><td>Brak odczytów.</td></tr>";
+  chart(P);
+}
+function chart(P){
+  var el=$("chart");
+  if(!P.length){el.innerHTML="<div class=note>Wykres pojawi się po dwóch odczytach.</div>";return}
+  var W=360,H=200,L=30,R=30,T=12,B=26,n=P.length,bw=(W-L-R)/n;
+  var mx=Math.max.apply(null,P.map(function(p){return p.pd}))*1.15||1;
+  var tmn=Math.min.apply(null,P.map(function(p){return p.T})),tmx=Math.max.apply(null,P.map(function(p){return p.T}));
+  if(tmx-tmn<4){tmx+=2;tmn-=2}
+  var ih=H-T-B,s="<svg viewBox='0 0 "+W+" "+H+"' role='img' aria-label='Wykres zużycia dobowego i temperatury'>";
+  s+="<line x1='"+L+"' y1='"+(T+ih)+"' x2='"+(W-R)+"' y2='"+(T+ih)+"' stroke='var(--ln)'/>";
+  s+="<text x='2' y='"+(T+8)+"' font-size='9' fill='var(--mu)'>"+fmt(mx,1)+"</text><text x='2' y='"+(T+ih)+"' font-size='9' fill='var(--mu)'>0</text>";
+  s+="<text x='"+(W-2)+"' y='"+(T+8)+"' font-size='9' text-anchor='end' fill='var(--mu)'>"+fmt(tmx,0)+"°</text><text x='"+(W-2)+"' y='"+(T+ih)+"' font-size='9' text-anchor='end' fill='var(--mu)'>"+fmt(tmn,0)+"°</text>";
+  var pts=[];
+  P.forEach(function(p,i){
+    var x=L+i*bw,bh=p.pd/mx*ih,cx=x+bw/2,cy=T+ih-(p.T-tmn)/(tmx-tmn)*ih;
+    s+="<rect x='"+(x+bw*0.12)+"' y='"+(T+ih-bh)+"' width='"+(bw*0.76)+"' height='"+bh+"' rx='2' fill='var(--ac)'/>";
+    pts.push(cx+","+cy);
+    if(n<=8||i%Math.ceil(n/8)==0)s+="<text x='"+cx+"' y='"+(H-10)+"' font-size='9' text-anchor='middle' fill='var(--mu)'>"+sd(p.b)+"</text>";
+  });
+  s+="<polyline points='"+pts.join(" ")+"' fill='none' stroke='var(--wm)' stroke-width='2'/>";
+  pts.forEach(function(q){var c=q.split(",");s+="<circle cx='"+c[0]+"' cy='"+c[1]+"' r='3' fill='var(--wm)'/>"});
+  el.innerHTML=s+"</svg>";
+}
+$("add").onclick=function(){
+  var d=$("d").value,v=parseFloat($("v").value),t=$("t").value,e=$("err");e.textContent="";
+  if(!d||isNaN(v)){e.textContent="Podaj datę i stan licznika.";return}
+  var bad=S.r.some(function(x){return x.d===d});
+  if(bad){e.textContent="Odczyt z tą datą już istnieje.";return}
+  var prev=S.r.filter(function(x){return day(x.d)<day(d)}).sort(function(a,b){return day(b.d)-day(a.d)})[0];
+  if(prev&&v<prev.v){e.textContent="Stan licznika jest niższy niż w poprzednim odczycie ("+fmt(prev.v,3)+").";return}
+  S.r.push({d:d,v:v,t:t===""?null:parseFloat(t)});save();
+  $("v").value="";$("t").value="";render();
+};
+$("rd").onclick=function(ev){var g=ev.target.getAttribute&&ev.target.getAttribute.bind(ev.target),i=g&&g("data-i"),e=g&&g("data-e");
+  if(e!=null){var r=S.r[+e],cur=r.t!=null&&r.t!==""?String(r.t).replace(".",","):"",a=prompt("Średnia temperatura okresu kończącego się "+r.d+" (°C). Puste = dane miesięczne.",cur);
+    if(a===null)return;a=a.trim().replace(",",".");
+    if(a===""){r.t=null}else{var x=parseFloat(a);if(isNaN(x))return;r.t=x}
+    save();render();return}
+  if(i!=null&&confirm("Usunąć ten odczyt?")){S.r.splice(+i,1);save();render()}};
+$("pr").onchange=function(){S.price=parseFloat($("pr").value)||0;save();render()};
+$("bt").onchange=function(){S.base=parseFloat($("bt").value)||15;save();render()};
+var mg="";["sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru"].forEach(function(n,i){mg+="<div><label>"+n+"</label><input type=number step=0.1 data-m="+i+" value="+S.m[i]+"></div>"});
+$("mg").innerHTML=mg;
+$("mg").onchange=function(ev){var i=ev.target.getAttribute("data-m");if(i!=null){var x=parseFloat(ev.target.value);if(!isNaN(x)){S.m[+i]=x;save();render()}}};
+$("ex").onclick=function(){
+  var t=JSON.stringify(S),b=$("bk");b.value=t;b.focus();b.select();
+  var ok=false;try{ok=document.execCommand("copy")}catch(e){}
+  if(!ok&&navigator.clipboard){try{navigator.clipboard.writeText(t);ok=true}catch(e){}}
+  $("bkm").textContent=ok?"Skopiowano do schowka. Wklej gdzieś w bezpieczne miejsce (np. notatki).":"Zaznacz kod w polu i skopiuj go ręcznie.";
+};
+$("im").onclick=function(){
+  var m=$("bkm"),o;
+  try{o=JSON.parse($("bk").value)}catch(e){m.textContent="To nie jest poprawny kod kopii.";return}
+  if(!o||!Array.isArray(o.r)||!Array.isArray(o.m)||o.m.length!==12||o.r.some(function(x){return !x||typeof x.d!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(x.d)||typeof x.v!=="number"})){m.textContent="Kod nie wygląda na kopię tej aplikacji.";return}
+  if(!confirm("Zastąpić obecne dane ("+S.r.length+" odczytów) importowanymi ("+o.r.length+")?"))return;
+  S={r:o.r,price:+o.price||0,base:+o.base||15,m:o.m.map(Number)};save();
+  document.querySelectorAll("[data-m]").forEach(function(i){i.value=S.m[+i.getAttribute("data-m")]});
+  $("pr").value=S.price||"";$("bt").value=S.base;render();
+  m.textContent="Zaimportowano "+S.r.length+" odczytów.";
+};
+$("pr").value=S.price||"";$("bt").value=S.base;
+$("d").value=new Date().toISOString().slice(0,10);
+render();
+</script>
+</body>
+</html>
